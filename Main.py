@@ -1,5 +1,5 @@
-
 import heapq
+from itertools import count
 
 class Passenger:
     def __init__(self, start_station, destination_station, request_time):
@@ -37,9 +37,10 @@ class EmergencyStack:
         return self.top is None
 
 passenger_queue = []
+counter = count()  # Global counter for tie-breaking
 
 def add_passenger(passenger):
-    heapq.heappush(passenger_queue, (passenger.priority, passenger))
+    heapq.heappush(passenger_queue, (passenger.priority, next(counter), passenger))
 
 def calculate_priority(current_station, destination_station):
     station_positions = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
@@ -51,12 +52,12 @@ def recalculate_priorities(current_station):
     temp_passengers = []
 
     while passenger_queue:
-        _, passenger = heapq.heappop(passenger_queue)
+        _, _, passenger = heapq.heappop(passenger_queue)
         passenger.priority = calculate_priority(current_station, passenger.destination_station)
         temp_passengers.append(passenger)
 
     for passenger in temp_passengers:
-        heapq.heappush(passenger_queue, (passenger.priority, passenger))
+        heapq.heappush(passenger_queue, (passenger.priority, next(counter), passenger))
 
 def calculate_travel_time(start_station, destination_station):
     station_positions = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
@@ -75,7 +76,7 @@ def train_system():
             passenger_count += 1
             current_station = passenger.destination_station
         else:
-            _, passenger = heapq.heappop(passenger_queue)
+            _, _, passenger = heapq.heappop(passenger_queue)
             print(f"Processing passenger to {passenger.destination_station} from {current_station}")
             travel_time = calculate_travel_time(current_station, passenger.destination_station)
             total_time += travel_time
