@@ -59,19 +59,19 @@ class TrainSystem:
     def add_passenger(self, start_station, destination_station):
         passenger = Passenger(start_station, destination_station, self.current_time)
         heapq.heappush(self.passenger_queue, passenger)
-        print(f"Added passenger from {start_station.upper()} to {destination_station.upper()}")
+        print(f"Added passenger from {start_station.upper()} to {destination_station.upper()} at time {self.current_time}")
         self.current_time += 1  # Increment time after each passenger is added
-
+    
     def add_emergency(self, start_station, destination_station):
         passenger = Passenger(start_station, destination_station, self.current_time)
         self.emergency_stack.push(passenger)
-        print(f"Emergency added for passenger from {start_station.upper()} to {destination_station.upper()}")
+        print(f"Emergency added for passenger from {start_station.upper()} to {destination_station.upper()} at time {self.current_time}")
         self.current_time += 1  # Increment time after each emergency is added
-
+    
     def calculate_priority(self, current_station, destination_station):
         distance = abs(self.station_positions[current_station] - self.station_positions[destination_station])
         return distance  # Smaller distance means higher priority
-
+    
     def recalculate_priorities(self, current_station):
         temp_passengers = []
         
@@ -85,10 +85,10 @@ class TrainSystem:
         # Rebuild the heap with updated priorities
         for passenger in temp_passengers:
             heapq.heappush(self.passenger_queue, passenger)
-
+    
     def calculate_travel_time(self, start_station, destination_station):
         return abs(self.station_positions[start_station] - self.station_positions[destination_station])
-
+    
     def run(self):
         current_station = 'A'  # Starting station
         total_time = 0
@@ -98,16 +98,18 @@ class TrainSystem:
             # Handle emergencies first
             if not self.emergency_stack.is_empty():
                 passenger = self.emergency_stack.pop()
-                print(f"Handling emergency for passenger from {passenger.start_station} to {passenger.destination_station}")
-                # Assume immediate processing
                 travel_time = self.calculate_travel_time(current_station, passenger.destination_station)
+                print(f"Handling emergency for passenger from {passenger.start_station} to {passenger.destination_station}")
+                print(f"Travel time for this emergency passenger: {travel_time}")
+                # Assume immediate processing
                 total_time += travel_time
                 passenger_count += 1
                 current_station = passenger.destination_station
             else:
                 passenger = heapq.heappop(self.passenger_queue)
-                print(f"Processing passenger from {passenger.start_station} to {passenger.destination_station} at station {current_station}")
                 travel_time = self.calculate_travel_time(current_station, passenger.destination_station)
+                print(f"Processing passenger from {passenger.start_station} to {passenger.destination_station} at station {current_station}")
+                print(f"Travel time for this passenger: {travel_time}")
                 total_time += travel_time
                 passenger_count += 1
                 current_station = passenger.destination_station
