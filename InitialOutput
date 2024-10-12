@@ -1,0 +1,10 @@
+At time = 1, A to C 
+At time = 2, B to D
+At time = 3, C to A
+At time = 4, D to A (Emergency)
+
+Handling emergency for passenger from D to A
+Processing passenger from A to C at station A
+Processing passenger from B to D at station C
+Processing passenger from C to A at station D
+Average travel time per passenger: 1.5
