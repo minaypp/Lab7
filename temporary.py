@@ -121,7 +121,7 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
             emergency.arrival_time = current_time
 
             print(f"Emergency dropped off at {train_station} at time {current_time}.")
-        
+
         # If there’s an onboard passenger, drop them off unless interrupted by an emergency
         if onboard_passenger:
             print(f"Resuming journey for passenger from {onboard_passenger.start_station} to {onboard_passenger.destination_station}.")
@@ -130,7 +130,7 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
             onboard_passenger.arrival_time = current_time
             print(f"Passenger dropped off at {train_station} at time {current_time}.")
             onboard_passenger = None  # Clear the onboard passenger
-        
+
         # Add new passengers to the queue if their request time has arrived
         while (passenger_index < total_passengers and 
                passenger_requests[passenger_index].request_time <= current_time):
@@ -148,6 +148,10 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
 
         # Advance time to the next event if needed
         next_event_time = find_next_event_time(emergency_stack, passenger_requests, passenger_index)
+        if next_event_time == float('inf'):
+            print("No more requests to process.")
+            break  # End simulation when no more requests are pending
+
         if next_event_time > current_time:
             print(f"No immediate requests. Advancing time to {next_event_time}.")
             current_time = next_event_time
