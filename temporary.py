@@ -1,186 +1,238 @@
 import heapq
 
-# Constants
-STATIONS = ['A', 'B', 'C', 'D']
-STATION_INDICES = {station: index for index, station in enumerate(STATIONS)}
-
 class Passenger:
     def __init__(self, start_station, destination_station, request_time):
         self.start_station = start_station
         self.destination_station = destination_station
         self.request_time = request_time
-        self.priority = None
-        self.arrival_time = None
+        self.priority = None  # Will be calculated dynamically
+        self.arrival_time = None  # Time when the passenger reaches their destination
+        self.boarding_time = None  # Time when the passenger boards the train
 
     def __lt__(self, other):
         return self.priority < other.priority
 
-class Emergency(Passenger):
-    pass
+class Emergency:
+    def __init__(self, start_station, destination_station, request_time):
+        self.start_station = start_station
+        self.destination_station = destination_station
+        self.request_time = request_time
+        self.arrival_time = None  # Time when the emergency reaches their destination
+        self.boarding_time = None  # Time when the emergency boards the train
 
-class EmergencyStack:
+class TrainSystem:
     def __init__(self):
-        self.top = None
+        self.stations = ['A', 'B', 'C', 'D']
+        self.passenger_requests = []
+        self.emergency_requests = []
+        self.current_time = 0
+        self.train_location = 'A'
+        self.train_direction = 1  # 1 for forward, -1 for backward
+        self.passenger_queue = []
+        self.emergency_stack = []
+        self.onboard_passengers = []
+        self.onboard_emergencies = []
+        self.total_travel_time = 0
+        self.total_passengers = 0
 
-    def push(self, emergency):
-        self.top = EmergencyStackNode(emergency, self.top)
+    def station_distance(self, start, end):
+        return abs(self.stations.index(start) - self.stations.index(end))
 
-    def pop(self):
-        if self.top is None:
-            return None
-        emergency = self.top.emergency
-        self.top = self.top.next_node
-        return emergency
+    def calculate_priority(self, passenger):
+        passenger.priority = self.station_distance(self.train_location, passenger.destination_station)
 
-    def is_empty(self):
-        return self.top is None
+    def add_passenger_request(self, passenger):
+        heapq.heappush(self.passenger_requests, (passenger.request_time, passenger))
 
-class EmergencyStackNode:
-    def __init__(self, emergency, next_node=None):
-        self.emergency = emergency
-        self.next_node = next_node
+    def add_emergency_request(self, emergency):
+        self.emergency_requests.append((emergency.request_time, emergency))
+        self.emergency_requests.sort(key=lambda x: x[0])  # Keep sorted by request time
 
-def main_menu():
-    passenger_requests = []
-    emergency_stack = EmergencyStack()
-    all_passengers = []
+    def get_next_station(self, destination):
+        current_index = self.stations.index(self.train_location)
+        dest_index = self.stations.index(destination)
+        if current_index < dest_index:
+            return self.stations[current_index + 1]
+        elif current_index > dest_index:
+            return self.stations[current_index - 1]
+        else:
+            return self.train_location
 
+    def move_train(self, destination):
+        next_station = self.get_next_station(destination)
+        if self.train_location != next_station:
+            self.train_location = next_station
+            print(f"Time {self.current_time}: Train moved to station {self.train_location}")
+
+    def process_boarding(self):
+        # Board emergencies first
+        emergencies_to_board = [e for rt, e in self.emergency_requests
+                                if e.start_station == self.train_location and e.request_time <= self.current_time]
+        for emergency in emergencies_to_board:
+            self.emergency_stack.append(emergency)
+            emergency.boarding_time = self.current_time
+            self.emergency_requests.remove((emergency.request_time, emergency))
+            print(f"Time {self.current_time}: Emergency boarded at station {self.train_location} going to {emergency.destination_station}")
+
+        # Board passengers
+        passengers_to_board = [p for rt, p in self.passenger_requests
+                               if p.start_station == self.train_location and p.request_time <= self.current_time]
+        for passenger in passengers_to_board:
+            self.calculate_priority(passenger)
+            passenger.boarding_time = self.current_time
+            heapq.heappush(self.passenger_queue, passenger)
+            self.passenger_requests.remove((passenger.request_time, passenger))
+            print(f"Time {self.current_time}: Passenger boarded at station {self.train_location} going to {passenger.destination_station}")
+
+    def process_alighting(self):
+        # Alight emergencies first
+        for emergency in self.onboard_emergencies[:]:
+            if emergency.destination_station == self.train_location:
+                emergency.arrival_time = self.current_time
+                self.onboard_emergencies.remove(emergency)
+                travel_time = emergency.arrival_time - emergency.boarding_time
+                self.total_travel_time += travel_time
+                self.total_passengers += 1
+                print(f"Time {self.current_time}: Emergency alighted at station {self.train_location}, travel time {travel_time}")
+
+        # Alight passengers
+        for passenger in self.onboard_passengers[:]:
+            if passenger.destination_station == self.train_location:
+                passenger.arrival_time = self.current_time
+                self.onboard_passengers.remove(passenger)
+                travel_time = passenger.arrival_time - passenger.boarding_time
+                self.total_travel_time += travel_time
+                self.total_passengers += 1
+                print(f"Time {self.current_time}: Passenger alighted at station {self.train_location}, travel time {travel_time}")
+
+    def handle_emergencies(self):
+        while self.emergency_stack or self.onboard_emergencies:
+            # If there are emergencies already onboard, handle them first
+            if self.onboard_emergencies:
+                emergency = self.onboard_emergencies[0]
+            else:
+                emergency = self.emergency_stack.pop()
+                self.onboard_emergencies.append(emergency)
+                print(f"Time {self.current_time}: Handling emergency from {emergency.start_station} to {emergency.destination_station}")
+
+            # Move train to emergency's destination
+            while self.train_location != emergency.destination_station:
+                self.current_time += 1
+                self.move_train(emergency.destination_station)
+                self.process_alighting()
+                self.process_boarding()
+
+            # Emergency alights
+            self.process_alighting()
+
+    def handle_passengers(self):
+        while self.passenger_queue or self.onboard_passengers:
+            if self.onboard_passengers:
+                passenger = self.onboard_passengers[0]
+            else:
+                passenger = heapq.heappop(self.passenger_queue)
+                self.onboard_passengers.append(passenger)
+                print(f"Time {self.current_time}: Handling passenger from {passenger.start_station} to {passenger.destination_station}")
+
+            # Move train to passenger's destination
+            while self.train_location != passenger.destination_station:
+                self.current_time += 1
+                # Check for emergencies before moving
+                self.process_boarding()
+                if self.emergency_stack or self.onboard_emergencies:
+                    self.handle_emergencies()
+                    # Recalculate priorities after handling emergencies
+                    for p in self.passenger_queue:
+                        self.calculate_priority(p)
+                    heapq.heapify(self.passenger_queue)
+                    break  # Break to reprocess the passenger queue
+
+                self.move_train(passenger.destination_station)
+                self.process_alighting()
+                self.process_boarding()
+                if self.emergency_stack or self.onboard_emergencies:
+                    break  # Break to handle emergencies
+
+            # Check if passenger has alighted
+            if passenger not in self.onboard_passengers:
+                continue  # Passenger has already alighted
+
+            # Passenger alights
+            self.process_alighting()
+
+    def run(self):
+        # Start simulation
+        while (self.passenger_requests or self.emergency_requests or self.onboard_passengers or
+               self.onboard_emergencies or self.passenger_queue or self.emergency_stack):
+
+            self.process_alighting()
+            self.process_boarding()
+
+            # Handle emergencies first
+            if self.emergency_stack or self.onboard_emergencies:
+                self.handle_emergencies()
+                # Recalculate priorities after emergencies
+                for passenger in self.passenger_queue:
+                    self.calculate_priority(passenger)
+                heapq.heapify(self.passenger_queue)
+            elif self.passenger_queue or self.onboard_passengers:
+                self.handle_passengers()
+            else:
+                # No one to handle, move train to next station
+                self.current_time += 1
+                self.move_train(self.get_next_station(self.stations[-1]))  # Move towards the end station
+
+        if self.total_passengers > 0:
+            average_travel_time = self.total_travel_time / self.total_passengers
+            print(f"\nAverage travel time: {average_travel_time}")
+        else:
+            print("No passengers or emergencies were processed.")
+
+def main():
+    train_system = TrainSystem()
+    print("Welcome to the Train Simulation System")
     while True:
-        print("\nSelect an option:")
+        print("\nMenu:")
         print("1. Add Passenger Request")
         print("2. Add Emergency Request")
-        print("3. Process Requests")
-        print("4. Exit")
-        choice = input("Enter your choice: ")
-
+        print("3. Start Simulation")
+        choice = input("Please select an option (1-3): ")
         if choice == '1':
-            passenger = add_passenger_request()
-            if passenger:
-                all_passengers.append(passenger)
-                passenger_requests.append(passenger)
+            try:
+                request_time = int(input("Enter request time: "))
+                start_station = input("Enter start station (A-D): ").upper()
+                destination_station = input("Enter destination station (A-D): ").upper()
+                if start_station not in train_system.stations or destination_station not in train_system.stations:
+                    print("Invalid station. Please try again.")
+                    continue
+                if start_station == destination_station:
+                    print("Start and destination stations cannot be the same. Please try again.")
+                    continue
+                passenger = Passenger(start_station, destination_station, request_time)
+                train_system.add_passenger_request(passenger)
+            except ValueError:
+                print("Invalid input. Please enter numeric values for time.")
         elif choice == '2':
-            emergency = add_emergency_request()
-            if emergency:
-                all_passengers.append(emergency)
-                emergency_stack.push(emergency)
+            try:
+                request_time = int(input("Enter request time: "))
+                start_station = input("Enter start station (A-D): ").upper()
+                destination_station = input("Enter destination station (A-D): ").upper()
+                if start_station not in train_system.stations or destination_station not in train_system.stations:
+                    print("Invalid station. Please try again.")
+                    continue
+                if start_station == destination_station:
+                    print("Start and destination stations cannot be the same. Please try again.")
+                    continue
+                emergency = Emergency(start_station, destination_station, request_time)
+                train_system.add_emergency_request(emergency)
+            except ValueError:
+                print("Invalid input. Please enter numeric values for time.")
         elif choice == '3':
-            process_requests(passenger_requests, emergency_stack, all_passengers)
-            break
-        elif choice == '4':
-            print("Exiting.")
+            print("Starting simulation...")
+            train_system.run()
             break
         else:
-            print("Invalid choice. Try again.")
-
-def add_passenger_request():
-    request_time = int(input("Enter request time (>= 0): "))
-    start_station = input("Enter start station (A-D): ").upper()
-    destination_station = input("Enter destination station (A-D): ").upper()
-
-    if start_station == destination_station:
-        print("Start and destination cannot be the same.")
-        return None
-
-    return Passenger(start_station, destination_station, request_time)
-
-def add_emergency_request():
-    request_time = int(input("Enter request time (>= 0): "))
-    start_station = input("Enter start station (A-D): ").upper()
-    destination_station = input("Enter destination station (A-D): ").upper()
-
-    if start_station == destination_station:
-        print("Start and destination cannot be the same.")
-        return None
-
-    return Emergency(start_station, destination_station, request_time)
-
-def process_requests(passenger_requests, emergency_stack, all_passengers):
-    current_time = 0
-    train_station = 'A'
-    onboard_passenger = None
-
-    print(f"Train starts at {train_station} at time {current_time}.")
-
-    passenger_requests.sort(key=lambda p: p.request_time)
-    passenger_queue = []
-    passenger_index = 0
-    total_passengers = len(passenger_requests)
-
-    while (not emergency_stack.is_empty() or passenger_queue 
-           or passenger_index < total_passengers or onboard_passenger):
-        
-        # Handle emergencies first, even if a passenger is onboard
-        while not emergency_stack.is_empty() and emergency_stack.top.emergency.request_time <= current_time:
-            emergency = emergency_stack.pop()
-            travel_to_station(train_station, emergency.start_station, current_time)
-            train_station = emergency.start_station
-
-            print(f"Emergency picked up at {train_station}.")
-            travel_to_station(train_station, emergency.destination_station, current_time)
-            train_station = emergency.destination_station
-            emergency.arrival_time = current_time
-
-            print(f"Emergency dropped off at {train_station} at time {current_time}.")
-
-        # If there’s an onboard passenger, drop them off unless interrupted by an emergency
-        if onboard_passenger:
-            print(f"Resuming journey for passenger from {onboard_passenger.start_station} to {onboard_passenger.destination_station}.")
-            travel_to_station(train_station, onboard_passenger.destination_station, current_time)
-            train_station = onboard_passenger.destination_station
-            onboard_passenger.arrival_time = current_time
-            print(f"Passenger dropped off at {train_station} at time {current_time}.")
-            onboard_passenger = None  # Clear the onboard passenger
-
-        # Add new passengers to the queue if their request time has arrived
-        while (passenger_index < total_passengers and 
-               passenger_requests[passenger_index].request_time <= current_time):
-            passenger = passenger_requests[passenger_index]
-            passenger.priority = calculate_priority(train_station, passenger.destination_station)
-            heapq.heappush(passenger_queue, passenger)
-            passenger_index += 1
-
-        if passenger_queue and not onboard_passenger:
-            passenger = heapq.heappop(passenger_queue)
-            travel_to_station(train_station, passenger.start_station, current_time)
-            train_station = passenger.start_station
-            print(f"Passenger picked up from {train_station} to {passenger.destination_station}.")
-            onboard_passenger = passenger
-
-        # Advance time to the next event if needed
-        next_event_time = find_next_event_time(emergency_stack, passenger_requests, passenger_index)
-        if next_event_time == float('inf'):
-            print("No more requests to process.")
-            break  # End simulation when no more requests are pending
-
-        if next_event_time > current_time:
-            print(f"No immediate requests. Advancing time to {next_event_time}.")
-            current_time = next_event_time
-
-    calculate_average_travel_time(all_passengers)
-
-def travel_to_station(current_station, target_station, current_time):
-    travel_time = calculate_travel_time(current_station, target_station)
-    current_time += travel_time
-    print(f"Moved from {current_station} to {target_station} in {travel_time} time units.")
-
-def find_next_event_time(emergency_stack, passenger_requests, passenger_index):
-    next_times = []
-    if not emergency_stack.is_empty():
-        next_times.append(emergency_stack.top.emergency.request_time)
-    if passenger_index < len(passenger_requests):
-        next_times.append(passenger_requests[passenger_index].request_time)
-    return min(next_times) if next_times else float('inf')
-
-def calculate_travel_time(station_a, station_b):
-    return abs(STATION_INDICES[station_a] - STATION_INDICES[station_b])
-
-def calculate_priority(current_station, destination_station):
-    return calculate_travel_time(current_station, destination_station)
-
-def calculate_average_travel_time(passengers):
-    total_wait_time = sum([p.arrival_time - p.request_time for p in passengers])
-    average_time = total_wait_time / len(passengers) if passengers else 0
-    print(f"Average travel time: {average_time:.2f} units.")
+            print("Invalid choice. Please select 1, 2, or 3.")
 
 if __name__ == "__main__":
-    main_menu()
+    main()
