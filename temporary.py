@@ -29,7 +29,6 @@ class TrainSystem:
         self.train_location = 'A'
         self.train_direction = 1  # 1 for forward, -1 for backward
         self.passenger_queue = []
-        self.emergency_stack = []
         self.onboard_passengers = []
         self.onboard_emergencies = []
         self.total_travel_time = 0
@@ -42,11 +41,12 @@ class TrainSystem:
         passenger.priority = self.station_distance(self.train_location, passenger.destination_station)
 
     def add_passenger_request(self, passenger):
-        heapq.heappush(self.passenger_requests, (passenger.request_time, passenger))
+        self.passenger_requests.append(passenger)
+        self.passenger_requests.sort(key=lambda x: x.request_time)
 
     def add_emergency_request(self, emergency):
-        self.emergency_requests.append((emergency.request_time, emergency))
-        self.emergency_requests.sort(key=lambda x: x[0])  # Keep sorted by request time
+        self.emergency_requests.append(emergency)
+        self.emergency_requests.sort(key=lambda x: x.request_time)  # Keep sorted by request time
 
     def get_next_station(self, destination):
         current_index = self.stations.index(self.train_location)
@@ -65,23 +65,14 @@ class TrainSystem:
             print(f"Time {self.current_time}: Train moved to station {self.train_location}")
 
     def process_boarding(self):
-        # Board emergencies first
-        emergencies_to_board = [e for rt, e in self.emergency_requests
-                                if e.start_station == self.train_location and e.request_time <= self.current_time]
-        for emergency in emergencies_to_board:
-            self.emergency_stack.append(emergency)
-            emergency.boarding_time = self.current_time
-            self.emergency_requests.remove((emergency.request_time, emergency))
-            print(f"Time {self.current_time}: Emergency boarded at station {self.train_location} going to {emergency.destination_station}")
-
         # Board passengers
-        passengers_to_board = [p for rt, p in self.passenger_requests
+        passengers_to_board = [p for p in self.passenger_requests
                                if p.start_station == self.train_location and p.request_time <= self.current_time]
         for passenger in passengers_to_board:
             self.calculate_priority(passenger)
             passenger.boarding_time = self.current_time
             heapq.heappush(self.passenger_queue, passenger)
-            self.passenger_requests.remove((passenger.request_time, passenger))
+            self.passenger_requests.remove(passenger)
             print(f"Time {self.current_time}: Passenger boarded at station {self.train_location} going to {passenger.destination_station}")
 
     def process_alighting(self):
@@ -106,24 +97,61 @@ class TrainSystem:
                 print(f"Time {self.current_time}: Passenger alighted at station {self.train_location}, travel time {travel_time}")
 
     def handle_emergencies(self):
-        while self.emergency_stack or self.onboard_emergencies:
-            # If there are emergencies already onboard, handle them first
+        # Collect emergencies whose request_time <= current_time and have not yet been handled
+        pending_emergencies = [e for e in self.emergency_requests if e.request_time <= self.current_time]
+        # Remove them from emergency_requests
+        for emergency in pending_emergencies:
+            self.emergency_requests.remove(emergency)
+
+        while pending_emergencies or self.onboard_emergencies:
+            # Handle pending emergencies
+            if pending_emergencies:
+                # Pick the emergency with the earliest request time
+                emergency = min(pending_emergencies, key=lambda e: e.request_time)
+                # Move train to the emergency's start station
+                while self.train_location != emergency.start_station:
+                    self.current_time += 1
+                    self.move_train(emergency.start_station)
+                    self.process_alighting()
+                    self.process_boarding()
+                    # Check for new emergencies during movement
+                    new_emergencies = [e for e in self.emergency_requests if e.request_time <= self.current_time]
+                    for e in new_emergencies:
+                        self.emergency_requests.remove(e)
+                        pending_emergencies.append(e)
+
+                # Board the emergency
+                emergency.boarding_time = self.current_time
+                self.onboard_emergencies.append(emergency)
+                pending_emergencies.remove(emergency)
+                print(f"Time {self.current_time}: Emergency boarded at station {self.train_location} going to {emergency.destination_station}")
+
+            # Deliver onboard emergencies
             if self.onboard_emergencies:
                 emergency = self.onboard_emergencies[0]
-            else:
-                emergency = self.emergency_stack.pop()
-                self.onboard_emergencies.append(emergency)
-                print(f"Time {self.current_time}: Handling emergency from {emergency.start_station} to {emergency.destination_station}")
+                # Move train to emergency's destination
+                while self.train_location != emergency.destination_station:
+                    self.current_time += 1
+                    self.move_train(emergency.destination_station)
+                    self.process_alighting()
+                    self.process_boarding()
+                    # Check for new emergencies during movement
+                    new_emergencies = [e for e in self.emergency_requests if e.request_time <= self.current_time]
+                    for e in new_emergencies:
+                        self.emergency_requests.remove(e)
+                        pending_emergencies.append(e)
+                        # Break to handle new emergency
+                        break
+                    else:
+                        continue
+                    break  # Break if new emergency is added
 
-            # Move train to emergency's destination
-            while self.train_location != emergency.destination_station:
-                self.current_time += 1
-                self.move_train(emergency.destination_station)
-                self.process_alighting()
-                self.process_boarding()
-
-            # Emergency alights
-            self.process_alighting()
+                # Alight emergency if at destination
+                if self.train_location == emergency.destination_station:
+                    self.process_alighting()
+                    self.onboard_emergencies.remove(emergency)
+                    print(f"Time {self.current_time}: Emergency alighted at station {self.train_location}, travel time {self.current_time - emergency.boarding_time}")
+                    self.current_time += 1  # Advance time after alighting
 
     def handle_passengers(self):
         while self.passenger_queue or self.onboard_passengers:
@@ -137,9 +165,10 @@ class TrainSystem:
             # Move train to passenger's destination
             while self.train_location != passenger.destination_station:
                 self.current_time += 1
-                # Check for emergencies before moving
-                self.process_boarding()
-                if self.emergency_stack or self.onboard_emergencies:
+                # Before moving, check for new emergencies
+                pending_emergencies = [e for e in self.emergency_requests if e.request_time <= self.current_time]
+                if pending_emergencies:
+                    # Handle emergencies
                     self.handle_emergencies()
                     # Recalculate priorities after handling emergencies
                     for p in self.passenger_queue:
@@ -150,8 +179,6 @@ class TrainSystem:
                 self.move_train(passenger.destination_station)
                 self.process_alighting()
                 self.process_boarding()
-                if self.emergency_stack or self.onboard_emergencies:
-                    break  # Break to handle emergencies
 
             # Check if passenger has alighted
             if passenger not in self.onboard_passengers:
@@ -159,17 +186,20 @@ class TrainSystem:
 
             # Passenger alights
             self.process_alighting()
+            if self.train_location == passenger.destination_station:
+                self.current_time += 1  # Advance time after alighting
 
     def run(self):
         # Start simulation
         while (self.passenger_requests or self.emergency_requests or self.onboard_passengers or
-               self.onboard_emergencies or self.passenger_queue or self.emergency_stack):
+               self.onboard_emergencies or self.passenger_queue):
 
             self.process_alighting()
             self.process_boarding()
 
-            # Handle emergencies first
-            if self.emergency_stack or self.onboard_emergencies:
+            # Collect any new emergencies whose request_time <= current_time
+            pending_emergencies = [e for e in self.emergency_requests if e.request_time <= self.current_time]
+            if pending_emergencies or self.onboard_emergencies:
                 self.handle_emergencies()
                 # Recalculate priorities after emergencies
                 for passenger in self.passenger_queue:
@@ -178,9 +208,8 @@ class TrainSystem:
             elif self.passenger_queue or self.onboard_passengers:
                 self.handle_passengers()
             else:
-                # No one to handle, move train to next station
+                # No one to handle, advance time
                 self.current_time += 1
-                self.move_train(self.get_next_station(self.stations[-1]))  # Move towards the end station
 
         if self.total_passengers > 0:
             average_travel_time = self.total_travel_time / self.total_passengers
