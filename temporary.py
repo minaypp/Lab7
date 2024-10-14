@@ -9,8 +9,8 @@ class Passenger:
         self.start_station = start_station
         self.destination_station = destination_station
         self.request_time = request_time
-        self.priority = None  # Will be calculated
-        self.arrival_time = None  # Time when the passenger reaches the destination
+        self.priority = None
+        self.arrival_time = None
 
     def __lt__(self, other):
         return self.priority < other.priority
@@ -97,6 +97,8 @@ def add_emergency_request():
 def process_requests(passenger_requests, emergency_stack, all_passengers):
     current_time = 0
     train_station = 'A'
+    onboard_passenger = None
+
     print(f"Train starts at {train_station} at time {current_time}.")
 
     passenger_requests.sort(key=lambda p: p.request_time)
@@ -105,13 +107,31 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
     total_passengers = len(passenger_requests)
 
     while (not emergency_stack.is_empty() or passenger_queue 
-           or passenger_index < total_passengers):
+           or passenger_index < total_passengers or onboard_passenger):
         
+        # Handle emergencies first, even if a passenger is onboard
         while not emergency_stack.is_empty() and emergency_stack.top.emergency.request_time <= current_time:
             emergency = emergency_stack.pop()
-            travel_and_handle(train_station, emergency, current_time, True)
-            train_station = emergency.destination_station
+            travel_to_station(train_station, emergency.start_station, current_time)
+            train_station = emergency.start_station
 
+            print(f"Emergency picked up at {train_station}.")
+            travel_to_station(train_station, emergency.destination_station, current_time)
+            train_station = emergency.destination_station
+            emergency.arrival_time = current_time
+
+            print(f"Emergency dropped off at {train_station} at time {current_time}.")
+        
+        # If there’s an onboard passenger, drop them off unless interrupted by an emergency
+        if onboard_passenger:
+            print(f"Resuming journey for passenger from {onboard_passenger.start_station} to {onboard_passenger.destination_station}.")
+            travel_to_station(train_station, onboard_passenger.destination_station, current_time)
+            train_station = onboard_passenger.destination_station
+            onboard_passenger.arrival_time = current_time
+            print(f"Passenger dropped off at {train_station} at time {current_time}.")
+            onboard_passenger = None  # Clear the onboard passenger
+        
+        # Add new passengers to the queue if their request time has arrived
         while (passenger_index < total_passengers and 
                passenger_requests[passenger_index].request_time <= current_time):
             passenger = passenger_requests[passenger_index]
@@ -119,28 +139,25 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
             heapq.heappush(passenger_queue, passenger)
             passenger_index += 1
 
-        if passenger_queue:
+        if passenger_queue and not onboard_passenger:
             passenger = heapq.heappop(passenger_queue)
-            travel_and_handle(train_station, passenger, current_time, False)
-            train_station = passenger.destination_station
+            travel_to_station(train_station, passenger.start_station, current_time)
+            train_station = passenger.start_station
+            print(f"Passenger picked up from {train_station} to {passenger.destination_station}.")
+            onboard_passenger = passenger
 
-        else:
-            next_event_time = find_next_event_time(emergency_stack, passenger_requests, passenger_index)
-            if next_event_time > current_time:
-                print(f"Advancing time to {next_event_time}.")
-                current_time = next_event_time
+        # Advance time to the next event if needed
+        next_event_time = find_next_event_time(emergency_stack, passenger_requests, passenger_index)
+        if next_event_time > current_time:
+            print(f"No immediate requests. Advancing time to {next_event_time}.")
+            current_time = next_event_time
 
     calculate_average_travel_time(all_passengers)
 
-def travel_and_handle(train_station, passenger, current_time, is_emergency):
-    travel_time = calculate_travel_time(train_station, passenger.start_station)
+def travel_to_station(current_station, target_station, current_time):
+    travel_time = calculate_travel_time(current_station, target_station)
     current_time += travel_time
-    print(f"Moved to {passenger.start_station} in {travel_time} units.")
-
-    travel_time = calculate_travel_time(passenger.start_station, passenger.destination_station)
-    current_time += travel_time
-    passenger.arrival_time = current_time
-    print(f"{'Emergency' if is_emergency else 'Passenger'} from {passenger.start_station} to {passenger.destination_station} handled at time {current_time}.")
+    print(f"Moved from {current_station} to {target_station} in {travel_time} time units.")
 
 def find_next_event_time(emergency_stack, passenger_requests, passenger_index):
     next_times = []
