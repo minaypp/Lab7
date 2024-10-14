@@ -77,28 +77,33 @@ def main_menu():
 
 def add_passenger_request():
     print("\n--- Add Passenger Request ---")
-    try:
-        request_time = int(input("Enter request time (integer >= 0): "))
-        if request_time < 0:
-            print("Request time cannot be negative.")
-            return None
-    except ValueError:
-        print("Invalid input. Please enter a valid integer for time.")
-        return None
+    while True:
+        try:
+            request_time = int(input("Enter request time (integer >= 0): "))
+            if request_time < 0:
+                print("Request time cannot be negative. Please try again.")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Please enter a valid integer for time.")
+            continue
 
-    start_station = input("Enter start station (A, B, C, D): ").upper()
-    if start_station not in STATIONS:
-        print("Invalid start station.")
-        return None
+    while True:
+        start_station = input("Enter start station (A, B, C, D): ").upper()
+        if start_station not in STATIONS:
+            print("Invalid start station. Please enter A, B, C, or D.")
+            continue
+        break
 
-    destination_station = input("Enter destination station (A, B, C, D): ").upper()
-    if destination_station not in STATIONS:
-        print("Invalid destination station.")
-        return None
-
-    if start_station == destination_station:
-        print("Start station and destination station cannot be the same.")
-        return None
+    while True:
+        destination_station = input("Enter destination station (A, B, C, D): ").upper()
+        if destination_station not in STATIONS:
+            print("Invalid destination station. Please enter A, B, C, or D.")
+            continue
+        if start_station == destination_station:
+            print("Start station and destination station cannot be the same. Please try again.")
+            continue
+        break
 
     passenger = Passenger(start_station, destination_station, request_time)
     print("Passenger request added successfully!")
@@ -106,28 +111,33 @@ def add_passenger_request():
 
 def add_emergency_request():
     print("\n--- Add Emergency Request ---")
-    try:
-        request_time = int(input("Enter request time (integer >= 0): "))
-        if request_time < 0:
-            print("Request time cannot be negative.")
-            return None
-    except ValueError:
-        print("Invalid input. Please enter a valid integer for time.")
-        return None
+    while True:
+        try:
+            request_time = int(input("Enter request time (integer >= 0): "))
+            if request_time < 0:
+                print("Request time cannot be negative. Please try again.")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Please enter a valid integer for time.")
+            continue
 
-    start_station = input("Enter start station (A, B, C, D): ").upper()
-    if start_station not in STATIONS:
-        print("Invalid start station.")
-        return None
+    while True:
+        start_station = input("Enter start station (A, B, C, D): ").upper()
+        if start_station not in STATIONS:
+            print("Invalid start station. Please enter A, B, C, or D.")
+            continue
+        break
 
-    destination_station = input("Enter destination station (A, B, C, D): ").upper()
-    if destination_station not in STATIONS:
-        print("Invalid destination station.")
-        return None
-
-    if start_station == destination_station:
-        print("Start station and destination station cannot be the same.")
-        return None
+    while True:
+        destination_station = input("Enter destination station (A, B, C, D): ").upper()
+        if destination_station not in STATIONS:
+            print("Invalid destination station. Please enter A, B, C, or D.")
+            continue
+        if start_station == destination_station:
+            print("Start station and destination station cannot be the same. Please try again.")
+            continue
+        break
 
     emergency = Emergency(start_station, destination_station, request_time)
     print("Emergency request added successfully!")
@@ -137,6 +147,7 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
     print("\nProcessing all requests...")
     current_time = 0
     train_station = 'A'  # Train starts at Station A
+    print(f"Train starting at station {train_station} at time {current_time}.")
 
     # Sort passenger requests based on request time
     passenger_requests.sort(key=lambda p: p.request_time)
@@ -149,21 +160,21 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
     total_passengers = len(passenger_requests)
 
     while not emergency_stack.is_empty() or passenger_queue or passenger_index < total_passengers:
-        # Handle emergencies first
-        while not emergency_stack.is_empty():
+        # Handle emergencies that have occurred up to the current time
+        while not emergency_stack.is_empty() and emergency_stack.top.emergency.request_time <= current_time:
             emergency = emergency_stack.pop()
             # Move train to emergency's start station
             travel_time = calculate_travel_time(train_station, emergency.start_station)
             current_time += travel_time
+            print(f"\nTrain moved to {emergency.start_station} in {travel_time} time units to pick up emergency.")
             train_station = emergency.start_station
-            print(f"\nHandling emergency from {emergency.start_station} to {emergency.destination_station}.")
-            print(f"Train moved to {train_station} in {travel_time} time units.")
             # Move train to emergency's destination station
             travel_time = calculate_travel_time(train_station, emergency.destination_station)
             current_time += travel_time
             train_station = emergency.destination_station
             emergency.arrival_time = current_time
-            print(f"Emergency passenger dropped off at {train_station} at time {current_time}.")
+            print(f"Emergency from {emergency.start_station} to {emergency.destination_station} handled. Current time: {current_time}")
+            print(f"Train is now at station {train_station}.")
             # Update wait time for this emergency
             emergency.wait_time = emergency.arrival_time - emergency.request_time
 
@@ -188,28 +199,51 @@ def process_requests(passenger_requests, emergency_stack, all_passengers):
 
             # Process the passenger with the highest priority (lowest priority number)
             passenger = heapq.heappop(passenger_queue)
-            # Move train to passenger's start station
-            travel_time = calculate_travel_time(train_station, passenger.start_station)
-            current_time += travel_time
-            train_station = passenger.start_station
-            print(f"\nPicking up passenger from {passenger.start_station} to {passenger.destination_station}.")
-            print(f"Train moved to {train_station} in {travel_time} time units.")
-            # Move train to passenger's destination station
-            travel_time = calculate_travel_time(train_station, passenger.destination_station)
-            current_time += travel_time
-            train_station = passenger.destination_station
-            passenger.arrival_time = current_time
-            print(f"Passenger dropped off at {train_station} at time {current_time}.")
-            # Update wait time for this passenger
-            passenger.wait_time = passenger.arrival_time - passenger.request_time
-        else:
-            # If no passengers are ready, advance time to the next request time
-            if passenger_index < total_passengers:
-                next_request_time = passenger_requests[passenger_index].request_time
-                print(f"\nNo requests to process. Advancing time from {current_time} to {next_request_time}.")
-                current_time = next_request_time
+
+            # Ensure train does not pick up passengers before their request time
+            if passenger.request_time > current_time:
+                print(f"\nNext passenger not ready until time {passenger.request_time}. Advancing time.")
+                current_time = passenger.request_time
+
+            # Handle any emergencies that have come in during the wait
+            while not emergency_stack.is_empty() and emergency_stack.top.emergency.request_time <= current_time:
+                # Reinsert passenger back into queue
+                heapq.heappush(passenger_queue, passenger)
+                break  # Break to handle the emergency in the next iteration
+
             else:
-                # All passengers have been processed
+                # Move train to passenger's start station
+                travel_time = calculate_travel_time(train_station, passenger.start_station)
+                current_time += travel_time
+                print(f"\nTrain moved to {passenger.start_station} in {travel_time} time units to pick up passenger.")
+                train_station = passenger.start_station
+                print(f"Picking up passenger from {passenger.start_station} to {passenger.destination_station} at time {current_time}.")
+                print(f"Train is now at station {train_station}.")
+                # Move train to passenger's destination station
+                travel_time = calculate_travel_time(train_station, passenger.destination_station)
+                current_time += travel_time
+                train_station = passenger.destination_station
+                passenger.arrival_time = current_time
+                print(f"Passenger dropped off at {train_station} at time {current_time}.")
+                print(f"Train is now at station {train_station}.")
+                # Update wait time for this passenger
+                passenger.wait_time = passenger.arrival_time - passenger.request_time
+
+        else:
+            # If there are pending emergencies, advance time to the next emergency request time
+            next_times = []
+            if not emergency_stack.is_empty():
+                next_times.append(emergency_stack.top.emergency.request_time)
+            # If there are pending passengers, advance time to the next passenger request time
+            if passenger_index < total_passengers:
+                next_times.append(passenger_requests[passenger_index].request_time)
+            if next_times:
+                next_event_time = min(next_times)
+                if next_event_time > current_time:
+                    print(f"\nNo requests to process. Advancing time from {current_time} to {next_event_time}.")
+                    current_time = next_event_time
+            else:
+                # All requests have been processed
                 break
 
     # Calculate average wait time
